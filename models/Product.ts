@@ -10,7 +10,7 @@ export interface ProductAttributes {
   precio_venta: number;
   stock_actual: number;
   stock_minimo: number;
-  proveedor?: string;
+  proveedor_id?: number;
   descripcion?: string;
   created_at?: Date;
   updated_at?: Date;
@@ -25,7 +25,7 @@ export class Product extends Model<ProductAttributes> implements ProductAttribut
   public precio_venta!: number;
   public stock_actual!: number;
   public stock_minimo!: number;
-  public proveedor!: string;
+  public proveedor_id!: number;
   public descripcion!: string;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -46,6 +46,7 @@ Product.init(
       type: DataTypes.STRING(50),
       allowNull: true,
       unique: true,
+      defaultValue: null,
     },
     categoria: {
       type: DataTypes.STRING(100),
@@ -71,9 +72,13 @@ Product.init(
       allowNull: false,
       defaultValue: 0,
     },
-    proveedor: {
-      type: DataTypes.STRING(255),
+    proveedor_id: {
+      type: DataTypes.INTEGER,
       allowNull: true,
+      references: {
+        model: 'proveedores',
+        key: 'id'
+      }
     },
     descripcion: {
       type: DataTypes.TEXT,

@@ -1,27 +1,23 @@
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../lib/database';
 
-export interface CustomerAttributes {
+export interface ProveedorAttributes {
   id?: number;
   nombre: string;
   email?: string;
   telefono?: string;
   direccion?: string;
-  created_at?: Date;
-  updated_at?: Date;
 }
 
-export class Customer extends Model<CustomerAttributes> implements CustomerAttributes {
+export class Proveedor extends Model<ProveedorAttributes> implements ProveedorAttributes {
   public id!: number;
   public nombre!: string;
   public email!: string;
   public telefono!: string;
   public direccion!: string;
-  public readonly created_at!: Date;
-  public readonly updated_at!: Date;
 }
 
-Customer.init(
+Proveedor.init(
   {
     id: {
       type: DataTypes.INTEGER,
@@ -43,14 +39,13 @@ Customer.init(
     direccion: {
       type: DataTypes.TEXT,
       allowNull: true,
-    }
+    },
   },
   {
     sequelize,
-    tableName: 'clientes',
-    timestamps: true,
-    underscored: true,
+    tableName: 'proveedores',
+    timestamps: false // Desactivar timestamps ya que la tabla no tiene created_at y updated_at
   }
 );
 
-export default Customer; 
+export default Proveedor; 

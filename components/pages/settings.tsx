@@ -76,7 +76,7 @@ export function SettingsComponent() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Configuración</h1>
           <p className="text-muted-foreground">
-            Administra y personaliza Twist_Venta
+            Administra y personaliza papeleria_colibri
           </p>
         </div>
         <div className="flex gap-2">
@@ -105,7 +105,7 @@ export function SettingsComponent() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="business-name">Nombre del Negocio</Label>
-            <Input id="business-name" defaultValue="Twist_Venta" />
+                            <Input id="business-name" defaultValue="papeleria_colibri" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="business-address">Dirección</Label>
@@ -118,12 +118,12 @@ export function SettingsComponent() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="business-email">Email</Label>
-              <Input id="business-email" type="email" placeholder="info@twistventa.com" />
+              <Input id="business-email" type="email" placeholder="info@papeleriacolibri.com" />
             </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="business-website">Sitio Web</Label>
-            <Input id="business-website" placeholder="https://twistventa.com" />
+            <Input id="business-website" placeholder="https://papeleriacolibri.com" />
           </div>
         </CardContent>
       </Card>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { useToast } from "@/hooks/use-toast"
 import { 
   Plus, 
   Search, 
@@ -26,31 +28,287 @@ import {
   Barcode
 } from "lucide-react"
 
+interface Product {
+  id: number;
+  nombre: string;
+  descripcion?: string;
+  codigo_barras?: string;
+  categoria: string;
+  precio_compra: number;
+  precio_venta: number;
+  stock_actual: number;
+  stock_minimo: number;
+  proveedor_id?: number;
+  proveedor?: string; // Para compatibilidad con datos existentes
+  created_at: string;
+}
+
 export function Inventory() {
   const [isAddProductOpen, setIsAddProductOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const [formMode, setFormMode] = useState<"new" | "add-stock">("new")
+  const [selectedProductId, setSelectedProductId] = useState<string>("")
+  const [stockToAdd, setStockToAdd] = useState("")
+  const [proveedores, setProveedores] = useState<{id: number, nombre: string}[]>([])
+  const [formData, setFormData] = useState({
+    nombre: '',
+    codigo_barras: '',
+    descripcion: '',
+    categoria: '',
+    precio_compra: '',
+    precio_venta: '',
+    stock_minimo: '',
+    proveedor_id: ''
+  })
+  const { toast } = useToast()
 
-  // Categorías típicas de una papelería
+  // Categorías que coinciden con la base de datos
   const categories = [
-    "utiles-escolares",
-    "material-oficina", 
-    "arte-manualidades",
-    "tecnologia",
-    "libros-revistas",
-    "regalos-juguetes",
-    "servicios"
+    "papeleria",
+    "electronica", 
+    "de-tienda",
+    "limpieza",
+    "otros"
   ]
 
   const categoryLabels = {
-    "utiles-escolares": "Útiles Escolares",
-    "material-oficina": "Material de Oficina",
-    "arte-manualidades": "Arte y Manualidades", 
-    "tecnologia": "Tecnología",
-    "libros-revistas": "Libros y Revistas",
-    "regalos-juguetes": "Regalos y Juguetes",
-    "servicios": "Servicios"
+    "papeleria": "Papelería",
+    "electronica": "Electrónica", 
+    "de-tienda": "De Tienda",
+    "limpieza": "Limpieza",
+    "otros": "Otros"
   }
+
+  useEffect(() => {
+    fetchProducts()
+    fetchProveedores()
+  }, [])
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/products')
+      if (response.ok) {
+        const data = await response.json()
+      console.log('Productos cargados:', data)
+      console.log('Total de productos:', data.length)
+        setProducts(data)
+      } else {
+        console.error('Error fetching products')
+        setProducts([])
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error)
+      setProducts([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchProveedores = async () => {
+    try {
+      const response = await fetch('/api/proveedores')
+      if (response.ok) {
+        const data = await response.json()
+        setProveedores(data)
+      } else {
+        console.error('Error fetching proveedores')
+        setProveedores([])
+      }
+    } catch (error) {
+      console.error('Error fetching proveedores:', error)
+      setProveedores([])
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (formMode === "new") {
+      // Verificar qué campos están faltando
+      const missingFields = [];
+      if (!formData.nombre) missingFields.push("Nombre");
+      if (!formData.categoria) missingFields.push("Categoría");
+      if (!formData.precio_compra) missingFields.push("Precio de Compra");
+      if (!formData.precio_venta) missingFields.push("Precio de Venta");
+      
+      if (missingFields.length > 0) {
+        toast({
+          title: "Error",
+          description: `Por favor completa los siguientes campos obligatorios: ${missingFields.join(", ")}.`,
+          variant: "destructive",
+        })
+        return
+      }
+    
+    try {
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nombre: formData.nombre,
+          descripcion: formData.descripcion,
+          codigo_barras: formData.codigo_barras || null,
+          categoria: formData.categoria,
+          precio_compra: parseFloat(formData.precio_compra) || 0,
+          precio_venta: parseFloat(formData.precio_venta) || 0,
+          stock_minimo: parseInt(formData.stock_minimo) || 0,
+          proveedor_id: formData.proveedor_id ? parseInt(formData.proveedor_id) : null
+        })
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Producto agregado",
+          description: "El producto se ha agregado exitosamente al inventario.",
+        })
+        setIsAddProductOpen(false)
+        setFormData({
+          nombre: '',
+          descripcion: '',
+          codigo_barras: '',
+          categoria: '',
+          precio_compra: '',
+          precio_venta: '',
+          stock_minimo: '',
+          proveedor_id: ''
+        })
+        fetchProducts()
+      } else {
+        const error = await response.json()
+        toast({
+          title: "Error",
+          description: error.error || "Error al agregar el producto",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error creating product:', error)
+      toast({
+        title: "Error",
+        description: "Error al agregar el producto",
+          variant: "destructive",
+        })
+      }
+    } else {
+      // Modo agregar stock
+      if (!selectedProductId || !stockToAdd) {
+        toast({
+          title: "Error",
+          description: "Selecciona un producto y especifica la cantidad a agregar.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/products/${selectedProductId}/stock`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            cantidad: parseInt(stockToAdd)
+          })
+        })
+
+        if (response.ok) {
+          toast({
+            title: "Stock actualizado",
+            description: `Se agregaron ${stockToAdd} unidades al producto`,
+          })
+          setFormMode("new")
+          setSelectedProductId("")
+          setStockToAdd("")
+          fetchProducts()
+          setIsAddProductOpen(false)
+        } else {
+          const error = await response.json()
+          toast({
+            title: "Error",
+            description: error.error || "Error al actualizar el stock",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error('Error updating stock:', error)
+        toast({
+          title: "Error",
+          description: "Error al actualizar el stock",
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
+  const handleEditProduct = (product: Product) => {
+    setFormData({
+      nombre: product.nombre,
+      codigo_barras: product.codigo_barras || '',
+      descripcion: product.descripcion || '',
+      categoria: product.categoria,
+      precio_compra: product.precio_compra.toString(),
+      precio_venta: product.precio_venta.toString(),
+      stock_minimo: product.stock_minimo.toString(),
+      proveedor_id: product.proveedor || '' // Assuming product.proveedor is the ID
+    })
+    setFormMode("new")
+    setIsAddProductOpen(true)
+  }
+
+  const handleDeleteProduct = async (productId: number) => {
+    try {
+      const response = await fetch(`/api/products?id=${productId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Producto eliminado",
+          description: "El producto se ha eliminado exitosamente.",
+        })
+        fetchProducts()
+      } else {
+        const error = await response.json()
+        toast({
+          title: "Error",
+          description: error.error || "Error al eliminar el producto",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error)
+      toast({
+        title: "Error",
+        description: "Error al eliminar el producto",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const getStockStatus = (stock: number, minStock: number) => {
+    if (stock === 0) return { status: 'out-of-stock', label: 'Sin Stock', color: 'destructive' }
+    if (stock <= minStock) return { status: 'low-stock', label: 'Stock Bajo', color: 'secondary' }
+    return { status: 'in-stock', label: 'En Stock', color: 'default' }
+  }
+
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = product.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         product.codigo_barras?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         product.descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesCategory = selectedCategory === 'all' || product.categoria === selectedCategory
+    return matchesSearch && matchesCategory
+  })
+
+  const totalProducts = products.length
+  const lowStockProducts = products.filter(p => p.stock_actual <= p.stock_minimo && p.stock_actual > 0).length
+  const outOfStockProducts = products.filter(p => p.stock_actual === 0).length
+  const totalValue = products.reduce((sum, p) => sum + (Number(p.precio_compra) * p.stock_actual), 0)
 
   return (
     <div className="space-y-6">
@@ -62,7 +320,7 @@ export function Inventory() {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{totalProducts}</div>
             <p className="text-xs text-muted-foreground">
               Productos registrados
             </p>
@@ -75,7 +333,7 @@ export function Inventory() {
             <AlertTriangle className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">0</div>
+            <div className="text-2xl font-bold text-orange-600">{lowStockProducts}</div>
             <p className="text-xs text-muted-foreground">
               Necesitan reposición
             </p>
@@ -88,7 +346,7 @@ export function Inventory() {
             <TrendingDown className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">0</div>
+            <div className="text-2xl font-bold text-red-600">{outOfStockProducts}</div>
             <p className="text-xs text-muted-foreground">
               Agotados
             </p>
@@ -101,7 +359,7 @@ export function Inventory() {
             <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">$0.00</div>
+            <div className="text-2xl font-bold text-green-600">${totalValue.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
               Valor en inventario
             </p>
@@ -114,7 +372,7 @@ export function Inventory() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Inventario</h1>
           <p className="text-muted-foreground">
-            Gestiona el inventario de productos de Twist_Venta
+            Gestiona el inventario de productos de papeleria_colibri
           </p>
         </div>
         <div className="flex gap-2">
@@ -127,86 +385,206 @@ export function Inventory() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Agregar Nuevo Producto</DialogTitle>
+                <DialogTitle>
+                  {formMode === "new" ? "Agregar Nuevo Producto" : "Agregar Stock"}
+                </DialogTitle>
                 <DialogDescription>
-                  Completa la información del producto para agregarlo al inventario
+                  {formMode === "new" 
+                    ? "Completa la información del producto para agregarlo al inventario"
+                    : "Selecciona un producto existente y especifica la cantidad a agregar"
+                  }
                 </DialogDescription>
               </DialogHeader>
               
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nombre del Producto</Label>
-                    <Input id="name" placeholder="Ej: Cuaderno universitario" />
+              {/* Selector de modo */}
+              <div className="flex gap-2 mb-4">
+                <Button
+                  type="button"
+                  variant={formMode === "new" ? "default" : "outline"}
+                  onClick={() => setFormMode("new")}
+                  className="flex-1"
+                >
+                  Nuevo Producto
+                </Button>
+                <Button
+                  type="button"
+                  variant={formMode === "add-stock" ? "default" : "outline"}
+                  onClick={() => setFormMode("add-stock")}
+                  className="flex-1"
+                >
+                  Agregar Stock
+                </Button>
+              </div>
+
+              {formMode === "new" ? (
+              <form onSubmit={handleSubmit}>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Nombre del Producto</Label>
+                      <Input 
+                        id="name" 
+                        placeholder="Ej: Cuaderno universitario"
+                        value={formData.nombre}
+                        onChange={(e) => setFormData({...formData, nombre: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="barcode">Código de Barras</Label>
+                      <div className="relative">
+                        <Barcode className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          id="barcode" 
+                          placeholder="7501234567890" 
+                          className="pl-8"
+                          value={formData.codigo_barras}
+                          onChange={(e) => setFormData({...formData, codigo_barras: e.target.value})}
+                        />
+                      </div>
+                    </div>
                   </div>
+                  
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Categoría</Label>
+                      <Select 
+                        value={formData.categoria} 
+                        onValueChange={(value) => setFormData({...formData, categoria: value})}
+                        required
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar categoría" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((category) => (
+                            <SelectItem key={category} value={category}>
+                              {categoryLabels[category as keyof typeof categoryLabels]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="purchase-price">Precio de Compra</Label>
+                      <Input 
+                        id="purchase-price" 
+                        type="number" 
+                        placeholder="0.00"
+                        value={formData.precio_compra}
+                        onChange={(e) => setFormData({...formData, precio_compra: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="sale-price">Precio de Venta</Label>
+                      <Input 
+                        id="sale-price" 
+                        type="number" 
+                        placeholder="0.00"
+                        value={formData.precio_venta}
+                        onChange={(e) => setFormData({...formData, precio_venta: e.target.value})}
+                        required
+                      />
+                    </div>
+
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="min-stock">Stock Mínimo (Opcional)</Label>
+                      <Input 
+                        id="min-stock" 
+                        type="number" 
+                        placeholder="Ej: 5 (para alertas de reposición)"
+                        value={formData.stock_minimo}
+                        onChange={(e) => setFormData({...formData, stock_minimo: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="supplier">Proveedor</Label>
+                      <Select
+                        value={formData.proveedor_id}
+                        onValueChange={(value) => setFormData({...formData, proveedor_id: value})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar proveedor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {proveedores.map((proveedor) => (
+                            <SelectItem key={proveedor.id} value={proveedor.id.toString()}>
+                              {proveedor.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
                   <div className="space-y-2">
-                    <Label htmlFor="barcode">Código de Barras</Label>
-                    <div className="relative">
-                      <Barcode className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input id="barcode" placeholder="7501234567890" className="pl-8" />
+                    <Label htmlFor="description">Descripción</Label>
+                    <Textarea 
+                      id="description" 
+                      placeholder="Descripción detallada del producto..."
+                      rows={3}
+                      value={formData.descripcion}
+                      onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setIsAddProductOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit">
+                    Guardar Producto
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleSubmit}>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="product-select">Seleccionar Producto</Label>
+                      <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Elige un producto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {products.map((product) => (
+                            <SelectItem key={product.id} value={product.id.toString()}>
+                              {product.nombre} - Stock actual: {product.stock_actual}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="stock-amount">Cantidad a Agregar</Label>
+                      <Input 
+                        id="stock-amount" 
+                        type="number" 
+                        placeholder="Ej: 50"
+                        value={stockToAdd}
+                        onChange={(e) => setStockToAdd(e.target.value)}
+                        required
+                      />
                     </div>
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="category">Categoría</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar categoría" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {categoryLabels[category as keyof typeof categoryLabels]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="purchase-price">Precio de Compra</Label>
-                    <Input id="purchase-price" type="number" placeholder="0.00" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sale-price">Precio de Venta</Label>
-                    <Input id="sale-price" type="number" placeholder="0.00" />
-                  </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setIsAddProductOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit">
+                    Agregar Stock
+                  </Button>
                 </div>
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="stock">Stock Actual</Label>
-                    <Input id="stock" type="number" placeholder="0" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="min-stock">Stock Mínimo</Label>
-                    <Input id="min-stock" type="number" placeholder="0" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="supplier">Proveedor</Label>
-                    <Input id="supplier" placeholder="Nombre del proveedor" />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descripción</Label>
-                  <Textarea 
-                    id="description" 
-                    placeholder="Descripción detallada del producto..."
-                    rows={3}
-                  />
-                </div>
-              </div>
-              
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsAddProductOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button>
-                  Guardar Producto
-                </Button>
-              </div>
+              </form>
+            )}
             </DialogContent>
           </Dialog>
         </div>
@@ -273,8 +651,11 @@ export function Inventory() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="papeleria-central">Papelería Central</SelectItem>
-                  <SelectItem value="distribuidora-escolar">Distribuidora Escolar</SelectItem>
+                  {proveedores.map((proveedor) => (
+                    <SelectItem key={proveedor.id} value={proveedor.id.toString()}>
+                      {proveedor.nombre}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -291,38 +672,120 @@ export function Inventory() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Producto</TableHead>
-                <TableHead>Categoría</TableHead>
-                <TableHead>Código</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead>Precio Compra</TableHead>
-                <TableHead>Precio Venta</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {/* Mensaje cuando no hay productos */}
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-8">
-                  <div className="flex flex-col items-center space-y-2">
-                    <Package className="h-12 w-12 text-muted-foreground opacity-50" />
-                    <p className="text-muted-foreground font-medium">No hay productos registrados</p>
-                    <p className="text-sm text-muted-foreground">
-                      Los productos aparecerán aquí cuando los agregues al inventario
-                    </p>
-                    <Button className="mt-2" onClick={() => setIsAddProductOpen(true)}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Agregar Primer Producto
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Cargando productos...</p>
+              </div>
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No hay productos registrados</h3>
+                <p className="text-muted-foreground mb-4">
+                  Los productos aparecerán aquí cuando los agregues al inventario
+                </p>
+                <Button onClick={() => setIsAddProductOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Agregar Primer Producto
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Producto</TableHead>
+                  <TableHead>Categoría</TableHead>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Stock</TableHead>
+                  <TableHead>Precio Compra</TableHead>
+                  <TableHead>Precio Venta</TableHead>
+                  <TableHead>Proveedor</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredProducts.map((product) => {
+                  const stockStatus = getStockStatus(product.stock_actual, product.stock_minimo)
+                  return (
+                    <TableRow key={product.id}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{product.nombre}</div>
+                          {product.descripcion && (
+                            <div className="text-sm text-muted-foreground">{product.descripcion}</div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {categoryLabels[product.categoria as keyof typeof categoryLabels] || product.categoria}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {product.codigo_barras || 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-right">
+                          <div className="font-medium">{product.stock_actual}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Mín: {product.stock_minimo}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>${Number(product.precio_compra).toFixed(2)}</TableCell>
+                      <TableCell>${Number(product.precio_venta).toFixed(2)}</TableCell>
+                      <TableCell>
+                        {product.proveedor_id ? 
+                          proveedores.find(p => p.id === product.proveedor_id)?.nombre || 'N/A' 
+                          : 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={stockStatus.color as any}>
+                          {stockStatus.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta acción no se puede deshacer. Se eliminará permanentemente el producto "{product.nombre}".
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteProduct(product.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Eliminar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -5,7 +5,7 @@ const sequelize = new Sequelize({
   dialect: 'mysql',
   host: '127.0.0.1',
   port: 3306,
-  database: 'twist_venta',
+  database: 'papeleria_colibri',
   username: 'root',
   password: 'pablito03',
   logging: false,
@@ -212,50 +212,32 @@ const SaleItem = sequelize.define('SaleItem', {
 });
 
 async function initializeDatabase() {
-  console.log('🚀 Iniciando configuración de la base de datos...\n');
+  console.log('Iniciando configuración de la base de datos...');
 
   try {
-    // 1. Probar conexión
-    console.log('1️⃣ Probando conexión a MySQL...');
+    console.log('Probando conexión a MySQL...');
     await sequelize.authenticate();
-    console.log('✅ Conexión exitosa\n');
+    console.log('Conexión exitosa');
 
-    // 2. Crear tablas en orden correcto
-    console.log('2️⃣ Creando tablas en la base de datos...');
+    console.log('Creando tablas en la base de datos...');
     
-    // Crear tablas sin relaciones primero
     await Product.sync({ force: true });
-    console.log('✅ Tabla productos creada');
+    console.log('Tabla productos creada');
     
     await Customer.sync({ force: true });
-    console.log('✅ Tabla clientes creada');
+    console.log('Tabla clientes creada');
     
     await Sale.sync({ force: true });
-    console.log('✅ Tabla ventas creada');
+    console.log('Tabla ventas creada');
     
     await SaleItem.sync({ force: true });
-    console.log('✅ Tabla items_venta creada');
+    console.log('Tabla items_venta creada');
     
-    console.log('✅ Todas las tablas creadas exitosamente\n');
-
-    // 3. Mostrar resumen
-    console.log('🎉 ¡Base de datos configurada correctamente!');
-    console.log('\n📋 Tablas creadas:');
-    console.log('   • productos (Productos)');
-    console.log('   • clientes (Clientes)');
-    console.log('   • ventas (Ventas)');
-    console.log('   • items_venta (Items de venta)');
-    
-    console.log('\n🔗 Relaciones establecidas:');
-    console.log('   • Sale → Customer (Una venta pertenece a un cliente)');
-    console.log('   • Sale → SaleItem (Una venta tiene muchos items)');
-    console.log('   • SaleItem → Product (Un item de venta pertenece a un producto)');
-    
-    console.log('\n✨ Tu sistema Twist_Venta está listo para usar!');
-    console.log('   Ejecuta "npm run dev" para iniciar la aplicación');
+    console.log('Todas las tablas creadas exitosamente');
+    console.log('Base de datos configurada correctamente');
 
   } catch (error) {
-    console.error('❌ Error durante la inicialización:', error.message);
+    console.error('Error durante la inicialización:', error.message);
     process.exit(1);
   } finally {
     await sequelize.close();

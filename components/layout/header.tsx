@@ -28,7 +28,7 @@ export function Header() {
           </Button>
 
           <div className="hidden lg:block">
-            <h1 className="text-xl font-semibold">Twist_Venta</h1>
+            <h1 className="text-xl font-semibold">papeleria_colibri</h1>
           </div>
         </div>
 

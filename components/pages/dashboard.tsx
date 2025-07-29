@@ -4,14 +4,122 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Users, Package } from "lucide-react"
+import { useState, useEffect } from "react"
+
+interface Sale {
+  id: number;
+  numero_recibo: string;
+  nombre_cliente: string;
+  total: string | number;
+  metodo_pago: string;
+  created_at: string;
+}
+
+interface Product {
+  id: number;
+  nombre: string;
+  stock_actual: number;
+  precio_venta: number;
+}
+
+interface Customer {
+  id: number;
+  nombre: string;
+  email: string;
+}
+
+interface DashboardStats {
+  totalSales: number;
+  todaySales: number;
+  activeCustomers: number;
+  productsInStock: number;
+}
 
 export function Dashboard() {
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats>({
+    totalSales: 0,
+    todaySales: 0,
+    activeCustomers: 0,
+    productsInStock: 0
+  });
+  const [recentSales, setRecentSales] = useState<Sale[]>([]);
+  const [popularProducts, setPopularProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      // Fetch sales data
+      const salesResponse = await fetch('/api/sales');
+      const salesData = await salesResponse.json();
+      
+      // Fetch products data
+      const productsResponse = await fetch('/api/products');
+      const productsData = await productsResponse.json();
+      
+      // Fetch customers data
+      const customersResponse = await fetch('/api/customers');
+      const customersData = await customersResponse.json();
+
+      // Calculate today's sales
+      const today = new Date().toISOString().split('T')[0];
+      const todaySales = salesData.filter((sale: Sale) => 
+        sale.created_at.includes(today)
+      );
+
+      // Calculate total sales amount
+      const totalSalesAmount = salesData.reduce((sum: number, sale: Sale) => 
+        sum + Number(sale.total), 0
+      );
+
+      // Set dashboard stats
+      setStats({
+        totalSales: totalSalesAmount,
+        todaySales: todaySales.length,
+        activeCustomers: customersData.length,
+        productsInStock: productsData.filter((p: Product) => p.stock_actual > 0).length
+      });
+
+      // Set recent sales (last 5)
+      setRecentSales(salesData.slice(0, 5));
+
+      // Set popular products (placeholder - would need sales items data for real implementation)
+      setPopularProducts(productsData.slice(0, 5));
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN'
+    }).format(amount);
+  };
+
+  // Format date
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-MX', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">
-          Resumen de ventas y actividad de Twist_Venta
+          Resumen de ventas y actividad de papeleria_colibri
         </p>
       </div>
 
@@ -23,9 +131,9 @@ export function Dashboard() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$0.00</div>
+            <div className="text-2xl font-bold">{formatCurrency(stats.totalSales)}</div>
             <p className="text-xs text-muted-foreground">
-              Sin datos disponibles
+              {loading ? 'Cargando...' : stats.totalSales === 0 ? 'Sin datos disponibles' : 'Total acumulado'}
             </p>
           </CardContent>
         </Card>
@@ -36,9 +144,9 @@ export function Dashboard() {
             <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{stats.todaySales}</div>
             <p className="text-xs text-muted-foreground">
-              Sin datos disponibles
+              {loading ? 'Cargando...' : stats.todaySales === 0 ? 'Sin ventas hoy' : 'Ventas del día'}
             </p>
           </CardContent>
         </Card>
@@ -49,9 +157,9 @@ export function Dashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{stats.activeCustomers}</div>
             <p className="text-xs text-muted-foreground">
-              Sin datos disponibles
+              {loading ? 'Cargando...' : stats.activeCustomers === 0 ? 'Sin clientes registrados' : 'Clientes registrados'}
             </p>
           </CardContent>
         </Card>
@@ -62,9 +170,9 @@ export function Dashboard() {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{stats.productsInStock}</div>
             <p className="text-xs text-muted-foreground">
-              Sin datos disponibles
+              {loading ? 'Cargando...' : stats.productsInStock === 0 ? 'Sin productos en inventario' : 'Productos disponibles'}
             </p>
           </CardContent>
         </Card>
@@ -76,17 +184,39 @@ export function Dashboard() {
           <CardHeader>
             <CardTitle>Ventas Recientes</CardTitle>
             <CardDescription>
-              Las últimas transacciones de Twist_Venta
+              Las últimas transacciones de papeleria_colibri
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            {loading ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <p className="mt-2 text-sm text-muted-foreground">Cargando datos...</p>
+              </div>
+            ) : recentSales.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <ShoppingCart className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No hay ventas recientes</p>
                 <p className="text-sm">Los datos aparecerán aquí cuando registres ventas</p>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-4">
+                {recentSales.map((sale) => (
+                  <div key={sale.id} className="flex items-center justify-between border-b pb-2">
+                    <div>
+                      <p className="font-medium">{sale.numero_recibo}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {sale.nombre_cliente || 'Cliente ocasional'} • {formatDate(sale.created_at)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{formatCurrency(Number(sale.total))}</p>
+                      <Badge variant="outline">{sale.metodo_pago}</Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -98,13 +228,34 @@ export function Dashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            {loading ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <p className="mt-2 text-sm text-muted-foreground">Cargando datos...</p>
+              </div>
+            ) : popularProducts.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No hay productos populares</p>
-                <p className="text-sm">Los datos aparecerán aquí cuando registres ventas</p>
+                <p>No hay productos registrados</p>
+                <p className="text-sm">Los datos aparecerán aquí cuando agregues productos</p>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-4">
+                {popularProducts.map((product) => (
+                  <div key={product.id} className="flex items-center justify-between border-b pb-2">
+                    <div>
+                      <p className="font-medium">{product.nombre}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Stock: {product.stock_actual} unidades
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{formatCurrency(product.precio_venta)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

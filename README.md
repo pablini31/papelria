@@ -1,48 +1,50 @@
-# Twist_Venta
+# POS Papelería Pool Oropeza
 
-Sistema de punto de venta para Twist_Venta desarrollado con Next.js, TypeScript y Tailwind CSS.
+Sistema de punto de venta desarrollado para la papelería familiar Pool Oropeza.
 
-## 🚀 Características
+## Características
 
-- **Dashboard** con métricas de ventas y actividad
-- **Gestión de Ventas** con historial y filtros
-- **Inventario** (en desarrollo)
-- **Clientes** (en desarrollo)
-- **Reportes** (en desarrollo)
-- **Configuración** (en desarrollo)
-- **Tema oscuro/claro**
-- **Diseño responsive**
+- Dashboard principal con métricas de ventas
+- Gestión completa de ventas
+- Control de inventario
+- Administración de clientes
+- Gestión de proveedores
+- Sistema de usuarios con roles
+- Reportes básicos
+- Interfaz responsive
 
-## 🛠️ Tecnologías
+## Tecnologías utilizadas
 
-- **Next.js 15** - Framework de React
-- **TypeScript** - Tipado estático
-- **Tailwind CSS** - Framework de CSS
-- **Zustand** - Gestión de estado
-- **Radix UI** - Componentes accesibles
-- **Lucide React** - Iconos
+- Next.js 15
+- TypeScript
+- Tailwind CSS
+- MySQL
+- Sequelize ORM
+- Zustand para manejo de estado
 
-## 📦 Instalación
+## Instalación
 
-1. **Clonar el repositorio**
+1. Clonar el repositorio
    ```bash
-   git clone <tu-repositorio>
+   git clone <repositorio>
    cd pos-papeleria
    ```
 
-2. **Instalar dependencias**
+2. Instalar dependencias
    ```bash
-   npm install --legacy-peer-deps
+   npm install
    ```
 
-3. **Ejecutar en desarrollo**
+3. Configurar base de datos MySQL
+   - Crear base de datos 'papeleriapooloropeza'
+   - Ejecutar script de inicialización
+   ```bash
+   npm run db:init
+   ```
+
+4. Ejecutar aplicación
    ```bash
    npm run dev
-   ```
-
-4. **Abrir en el navegador**
-   ```
-   http://localhost:3000
    ```
 
 ## 🚀 Deploy

@@ -1,7 +1,7 @@
 "use client"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, ShoppingCart, Package, Users, BarChart3, Settings, X, Store } from "lucide-react"
+import { LayoutDashboard, ShoppingCart, Package, Users, BarChart3, Settings, X, Store, Truck, UserCog } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useUIStore } from "../../stores/uiStore"
@@ -10,7 +10,9 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Ventas", href: "/sales", icon: ShoppingCart },
   { name: "Inventario", href: "/inventory", icon: Package },
+  { name: "Proveedores", href: "/suppliers", icon: Truck },
   { name: "Clientes", href: "/customers", icon: Users },
+  { name: "Usuarios", href: "/users", icon: UserCog },
   { name: "Reportes", href: "/reports", icon: BarChart3 },
   { name: "Configuración", href: "/settings", icon: Settings },
 ]
@@ -34,7 +36,7 @@ export function Sidebar() {
         <div className="flex items-center justify-between h-16 px-6 border-b">
           <div className="flex items-center space-x-2">
             <Store className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold">Twist_Venta</span>
+            <span className="text-xl font-bold">papeleria_colibri</span>
           </div>
           <Button variant="ghost" size="sm" onClick={toggleSidebar} className="lg:hidden">
             <X className="h-5 w-5" />

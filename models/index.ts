@@ -3,6 +3,8 @@ import Product from './Product';
 import Customer from './Customer';
 import Sale from './Sale';
 import SaleItem from './SaleItem';
+import Proveedor from './Proveedor';
+import User from './User';
 
 // Definir relaciones entre modelos
 Sale.hasMany(SaleItem, {
@@ -35,13 +37,26 @@ Product.hasMany(SaleItem, {
   as: 'saleItems'
 });
 
+// Relación entre Producto y Proveedor
+Product.belongsTo(Proveedor, {
+  foreignKey: 'proveedor_id',
+  as: 'proveedor'
+});
+
+Proveedor.hasMany(Product, {
+  foreignKey: 'proveedor_id',
+  as: 'productos'
+});
+
 // Exportar modelos
 export {
   sequelize,
   Product,
   Customer,
   Sale,
-  SaleItem
+  SaleItem,
+  Proveedor,
+  User
 };
 
 export default {
@@ -49,5 +64,7 @@ export default {
   Product,
   Customer,
   Sale,
-  SaleItem
+  SaleItem,
+  Proveedor,
+  User
 }; 
