@@ -7,22 +7,23 @@ export async function GET(request: NextRequest) {
     
     try {
       const [customers] = await sequelize.query('CALL sp_MostrarClientes()');
-      return NextResponse.json(customers);
-    } catch (procedureError) {
-      const [customers] = await sequelize.query(`
-        SELECT 
-          id,
-          nombre,
-          email,
-          telefono,
-          direccion,
-          created_at,
-          updated_at
-        FROM clientes
-        ORDER BY created_at DESC
-      `);
-
-      return NextResponse.json(customers);
+      
+      if (Array.isArray(customers)) {
+        return NextResponse.json(customers);
+      } else {
+        const [customersDirect] = await sequelize.query('SELECT * FROM clientes ORDER BY nombre ASC');
+        return NextResponse.json(Array.isArray(customersDirect) ? customersDirect : []);
+      }
+    } catch (error) {
+      console.error('Error en stored procedure de clientes:', error);
+      
+      try {
+        const [customers] = await sequelize.query('SELECT * FROM clientes ORDER BY nombre ASC');
+        return NextResponse.json(Array.isArray(customers) ? customers : []);
+      } catch (directError) {
+        console.error('Error con SQL directo:', directError);
+        return NextResponse.json([]);
+      }
     }
   } catch (error: any) {
     console.error('Error fetching customers:', error);
@@ -42,33 +43,42 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    // Verificar si mysql2 está disponible
-    let sequelize: any;
-    let Customer: any;
-    
-    try {
-      const { Sequelize } = await import('sequelize');
-      sequelize = (await import('@/lib/database')).default;
-      Customer = (await import('@/models')).Customer;
-    } catch (importError) {
-      console.error('Error importing database modules:', importError);
-      return NextResponse.json(
-        { error: 'Base de datos no disponible' },
-        { status: 503 }
-      );
-    }
-    
-    // Verificar conexión a la base de datos
     await sequelize.authenticate();
     
-    // Crear nuevo cliente
-    const customer = await Customer.create(body);
-    
-    return NextResponse.json(customer, { status: 201 });
+    try {
+      const [result] = await sequelize.query('CALL sp_CrearCliente(?, ?, ?, ?)', {
+        replacements: [
+          body.nombre,
+          body.email,
+          body.telefono,
+          body.direccion
+        ]
+      });
+      
+      const [newCustomer] = await sequelize.query('SELECT * FROM clientes WHERE id = ?', {
+        replacements: [(result as any[])[0]?.id]
+      });
+      
+      return NextResponse.json((newCustomer as any[])[0], { status: 201 });
+    } catch (error) {
+      console.error('Error en stored procedure de crear cliente:', error);
+      
+      try {
+        const { Customer } = await import('@/models');
+        const customer = await Customer.create(body);
+        
+        return NextResponse.json(customer, { status: 201 });
+      } catch (ormError: any) {
+        console.error('Error con ORM:', ormError);
+        return NextResponse.json(
+          { error: 'Error al crear el cliente', details: ormError.message },
+          { status: 500 }
+        );
+      }
+    }
   } catch (error: any) {
     console.error('Error creating customer:', error);
     
-    // Si es un error de conexión, devolver error específico
     if (error.name === 'SequelizeConnectionError' || 
         error.message.includes('ECONNREFUSED') ||
         error.message.includes('connect') ||
@@ -80,7 +90,7 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json(
-      { error: 'Error al crear el cliente' },
+      { error: 'Error al crear el cliente', details: error.message },
       { status: 500 }
     );
   }

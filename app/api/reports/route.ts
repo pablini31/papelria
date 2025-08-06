@@ -3,115 +3,82 @@ import sequelize from '@/lib/database';
 
 export async function GET(request: NextRequest) {
   try {
-    // Verificar conexión a la base de datos
     await sequelize.authenticate();
     
-    // Obtener datos de ventas
-    const [sales] = await sequelize.query(`
-      SELECT 
-        v.id,
-        v.numero_recibo,
-        v.total,
-        v.estado,
-        v.metodo_pago,
-        v.created_at,
-        c.nombre AS nombre_cliente
-      FROM ventas v
-      LEFT JOIN clientes c ON v.cliente_id = c.id
-      ORDER BY v.created_at DESC
-      LIMIT 10
-    `);
+    let sales, products, customers, salesCount, revenueSum, productsCount, customersCount, lowStockCount, outOfStockCount;
     
-    // Obtener datos de productos
-    const [products] = await sequelize.query(`
-      SELECT 
-        id,
-        nombre,
-        categoria,
-        precio_venta,
-        stock_actual,
-        stock_minimo,
-        created_at
-      FROM productos
-      ORDER BY created_at DESC
-      LIMIT 10
-    `);
+    try {
+      sales = await sequelize.query('SELECT * FROM v_ventas_detalladas LIMIT 10') as [any[], unknown];
+    } catch (error) {
+      const [salesDirect] = await sequelize.query(`
+        SELECT 
+          v.*,
+          c.nombre AS nombre_cliente,
+          c.email AS email_cliente
+        FROM ventas v
+        LEFT JOIN clientes c ON v.cliente_id = c.id
+        ORDER BY v.created_at DESC 
+        LIMIT 10
+      `);
+      sales = [salesDirect];
+    }
     
-    // Obtener datos de clientes
-    const [customers] = await sequelize.query(`
-      SELECT 
-        id,
-        nombre,
-        email,
-        telefono,
-        created_at
-      FROM clientes
-      ORDER BY created_at DESC
-      LIMIT 10
-    `);
+    try {
+      products = await sequelize.query('SELECT * FROM productos ORDER BY created_at DESC LIMIT 10') as [any[], unknown];
+    } catch (error) {
+      const [productsDirect] = await sequelize.query('SELECT * FROM productos ORDER BY created_at DESC LIMIT 10');
+      products = [productsDirect];
+    }
     
-    // Calcular resumen
-    const [salesSummary] = await sequelize.query(`
-      SELECT 
-        COUNT(*) as total_sales,
-        COALESCE(SUM(total), 0) as total_revenue
-      FROM ventas
-      WHERE estado = 'completada'
-    `);
+    try {
+      customers = await sequelize.query('SELECT * FROM clientes ORDER BY created_at DESC LIMIT 10') as [any[], unknown];
+    } catch (error) {
+      const [customersDirect] = await sequelize.query('SELECT * FROM clientes ORDER BY created_at DESC LIMIT 10');
+      customers = [customersDirect];
+    }
     
-    const [productsSummary] = await sequelize.query(`
-      SELECT 
-        COUNT(*) as total_products,
-        COUNT(CASE WHEN stock_actual <= stock_minimo AND stock_actual > 0 THEN 1 END) as low_stock,
-        COUNT(CASE WHEN stock_actual = 0 THEN 1 END) as out_of_stock
-      FROM productos
-    `);
+    try {
+      const [stockCritico] = await sequelize.query('SELECT COUNT(*) as low_stock FROM v_productos_stock_critico') as [any[], unknown];
+      lowStockCount = [stockCritico];
+    } catch (error) {
+      const [lowStockDirect] = await sequelize.query('SELECT COUNT(*) as low_stock FROM productos WHERE stock_actual <= stock_minimo AND stock_actual > 0');
+      lowStockCount = [lowStockDirect];
+    }
     
-    const [customersSummary] = await sequelize.query(`
-      SELECT COUNT(*) as total_customers
-      FROM clientes
-    `);
+    try {
+      const [inventarioValorado] = await sequelize.query('SELECT COUNT(*) as out_of_stock FROM v_inventario_valorado WHERE estado_inventario = "SIN STOCK"') as [any[], unknown];
+      outOfStockCount = [inventarioValorado];
+    } catch (error) {
+      const [outOfStockDirect] = await sequelize.query('SELECT COUNT(*) as out_of_stock FROM productos WHERE stock_actual = 0');
+      outOfStockCount = [outOfStockDirect];
+    }
+    
+    salesCount = await sequelize.query('SELECT COUNT(*) as total_sales FROM ventas') as [any[], unknown];
+    revenueSum = await sequelize.query('SELECT COALESCE(SUM(total), 0) as total_revenue FROM ventas') as [any[], unknown];
+    productsCount = await sequelize.query('SELECT COUNT(*) as total_products FROM productos') as [any[], unknown];
+    customersCount = await sequelize.query('SELECT COUNT(*) as total_customers FROM clientes') as [any[], unknown];
     
     const summary = {
-      totalSales: salesSummary[0]?.total_sales || 0,
-      totalRevenue: salesSummary[0]?.total_revenue || 0,
-      totalProducts: productsSummary[0]?.total_products || 0,
-      totalCustomers: customersSummary[0]?.total_customers || 0,
-      lowStockProducts: productsSummary[0]?.low_stock || 0,
-      outOfStockProducts: productsSummary[0]?.out_of_stock || 0
+      totalSales: (salesCount as any[])[0]?.total_sales || 0,
+      totalRevenue: (revenueSum as any[])[0]?.total_revenue || 0,
+      totalProducts: (productsCount as any[])[0]?.total_products || 0,
+      totalCustomers: (customersCount as any[])[0]?.total_customers || 0,
+      lowStockProducts: (lowStockCount as any[])[0]?.low_stock || 0,
+      outOfStockProducts: (outOfStockCount as any[])[0]?.out_of_stock || 0
     };
     
     return NextResponse.json({
-      sales,
-      products,
-      customers,
+      sales: Array.isArray(sales[0]) ? sales[0] : [],
+      products: Array.isArray(products[0]) ? products[0] : [],
+      customers: Array.isArray(customers[0]) ? customers[0] : [],
       summary
     });
+    
   } catch (error: any) {
     console.error('Error fetching report data:', error);
     
-    // Si es un error de conexión, devolver datos vacíos
-    if (error.name === 'SequelizeConnectionError' || 
-        error.message.includes('ECONNREFUSED') ||
-        error.message.includes('connect') ||
-        error.message.includes('mysql2')) {
-      return NextResponse.json({
-        sales: [],
-        products: [],
-        customers: [],
-        summary: {
-          totalSales: 0,
-          totalRevenue: 0,
-          totalProducts: 0,
-          totalCustomers: 0,
-          lowStockProducts: 0,
-          outOfStockProducts: 0
-        }
-      });
-    }
-    
     return NextResponse.json(
-      { error: 'Error al obtener datos de reportes' },
+      { error: 'Error al obtener datos de reportes', details: error.message },
       { status: 500 }
     );
   }

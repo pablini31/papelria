@@ -1,61 +1,85 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sequelize from '@/lib/database';
-import { Product } from '@/models';
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const body = await request.json();
     const { id } = params;
-    const { cantidad } = await request.json();
+    const { cantidad } = body;
+    
 
+    
     if (!cantidad || cantidad <= 0) {
       return NextResponse.json(
         { error: 'La cantidad debe ser mayor a 0' },
         { status: 400 }
       );
     }
-
-    // Verificar conexión a la base de datos
+    
     await sequelize.authenticate();
-
-    // Buscar el producto
-    const product = await Product.findByPk(id);
-
-    if (!product) {
+    
+    const [product] = await sequelize.query(`
+      SELECT id, nombre, stock_actual 
+      FROM productos 
+      WHERE id = ?
+    `, {
+      replacements: [parseInt(id)]
+    });
+    
+    if (!Array.isArray(product) || product.length === 0) {
       return NextResponse.json(
         { error: 'Producto no encontrado' },
         { status: 404 }
       );
     }
-
-    // Actualizar el stock
-    const nuevoStock = product.stock_actual + cantidad;
-    await product.update({ stock_actual: nuevoStock });
-
-    return NextResponse.json(
-      { 
-        message: 'Stock actualizado exitosamente',
-        stock_actual: nuevoStock,
-        cantidad_agregada: cantidad
-      },
-      { status: 200 }
-    );
+    
+    const productData = product[0] as any;
+    const stockAnterior = productData.stock_actual;
+    const stockNuevo = stockAnterior + parseInt(cantidad);
+    
+    try {
+      const [result] = await sequelize.query('CALL sp_ActualizarStockProducto(?, ?)', {
+        replacements: [parseInt(id), parseInt(cantidad)]
+      });
+    } catch (procedureError: any) {
+      console.error('Error with stored procedure, using direct SQL:', procedureError.message);
+      await sequelize.query(`
+        UPDATE productos 
+        SET 
+          stock_actual = stock_actual + ?,
+          updated_at = NOW()
+        WHERE id = ?
+      `, {
+        replacements: [parseInt(cantidad), parseInt(id)]
+      });
+    }
+    
+    return NextResponse.json({ 
+      success: true, 
+      message: `Se agregaron ${cantidad} unidades al producto "${productData.nombre}"`,
+      stockAnterior,
+      stockNuevo,
+      cantidadAgregada: parseInt(cantidad)
+    });
+    
   } catch (error: any) {
-    console.error('Error updating stock:', error);
-    if (error.name === 'SequelizeConnectionError' ||
+    console.error('Error adding stock:', error);
+    
+    if (error.name === 'SequelizeConnectionError' || 
         error.message.includes('ECONNREFUSED') ||
-        error.message.includes('connect') ||
-        error.message.includes('mysql2')) {
+        error.message.includes('connect')) {
       return NextResponse.json(
         { error: 'Base de datos no disponible. Por favor, inicia MySQL.' },
         { status: 503 }
       );
     }
+    
     return NextResponse.json(
-      { error: 'Error al actualizar el stock' },
+      { error: 'Error al agregar stock', details: error.message },
       { status: 500 }
     );
   }
-} 
+}

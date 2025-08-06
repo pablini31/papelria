@@ -53,45 +53,83 @@ export function Dashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      // Fetch sales data
-      const salesResponse = await fetch('/api/sales');
-      const salesData = await salesResponse.json();
+      let reportsData;
       
-      // Fetch products data
-      const productsResponse = await fetch('/api/products');
-      const productsData = await productsResponse.json();
+      try {
+        const reportsResponse = await fetch('/api/reports');
+        reportsData = await reportsResponse.json();
+      } catch (error) {
+        const viewsResponse = await fetch('/api/reports/views?tipo=dashboard-completo');
+        const viewsData = await viewsResponse.json();
+        
+        if (viewsData.success && viewsData.data) {
+          const data = viewsData.data;
+          reportsData = {
+            summary: {
+              totalRevenue: data.resumen_hoy?.ingresos_totales || 0,
+              totalSales: data.resumen_hoy?.total_ventas || 0,
+              totalCustomers: data.clientes_top?.length || 0,
+              totalProducts: data.productos_mas_vendidos?.length || 0
+            },
+            sales: data.ventas_detalladas || [],
+            products: data.productos_mas_vendidos || []
+          };
+        } else {
+          throw new Error('No se pudieron obtener datos de vistas');
+        }
+      }
       
-      // Fetch customers data
-      const customersResponse = await fetch('/api/customers');
-      const customersData = await customersResponse.json();
-
-      // Calculate today's sales
-      const today = new Date().toISOString().split('T')[0];
-      const todaySales = salesData.filter((sale: Sale) => 
-        sale.created_at.includes(today)
-      );
-
-      // Calculate total sales amount
-      const totalSalesAmount = salesData.reduce((sum: number, sale: Sale) => 
-        sum + Number(sale.total), 0
-      );
-
-      // Set dashboard stats
-      setStats({
-        totalSales: totalSalesAmount,
-        todaySales: todaySales.length,
-        activeCustomers: customersData.length,
-        productsInStock: productsData.filter((p: Product) => p.stock_actual > 0).length
-      });
-
-      // Set recent sales (last 5)
-      setRecentSales(salesData.slice(0, 5));
-
-      // Set popular products (placeholder - would need sales items data for real implementation)
-      setPopularProducts(productsData.slice(0, 5));
-
+      if (reportsData.summary) {
+        setStats({
+          totalSales: reportsData.summary.totalRevenue || 0,
+          todaySales: reportsData.summary.totalSales || 0,
+          activeCustomers: reportsData.summary.totalCustomers || 0,
+          productsInStock: reportsData.summary.totalProducts || 0
+        });
+      }
+      
+      if (Array.isArray(reportsData.sales)) {
+        setRecentSales(reportsData.sales.slice(0, 5));
+      }
+      
+      if (Array.isArray(reportsData.products)) {
+        setPopularProducts(reportsData.products.slice(0, 5));
+      }
+      
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      
+      try {
+        const salesResponse = await fetch('/api/sales');
+        const salesData = await salesResponse.json();
+        
+        const productsResponse = await fetch('/api/products');
+        const productsData = await productsResponse.json();
+        
+        const customersResponse = await fetch('/api/customers');
+        const customersData = await customersResponse.json();
+
+        const today = new Date().toISOString().split('T')[0];
+        const todaySales = salesData.filter((sale: Sale) => 
+          sale.created_at.includes(today)
+        );
+
+        const totalSalesAmount = salesData.reduce((sum: number, sale: Sale) => 
+          sum + Number(sale.total), 0
+        );
+
+        setStats({
+          totalSales: totalSalesAmount,
+          todaySales: todaySales.length,
+          activeCustomers: customersData.length,
+          productsInStock: productsData.filter((p: Product) => p.stock_actual > 0).length
+        });
+
+        setRecentSales(salesData.slice(0, 5));
+        setPopularProducts(productsData.slice(0, 5));
+      } catch (fallbackError) {
+        console.error('Error en fallback:', fallbackError);
+      }
     } finally {
       setLoading(false);
     }

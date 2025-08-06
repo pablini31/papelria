@@ -1,7 +1,6 @@
 import { Sequelize } from 'sequelize';
 import mysql2 from 'mysql2';
 
-
 const sequelize = new Sequelize({
   dialect: 'mysql',
   dialectModule: mysql2,
@@ -10,7 +9,7 @@ const sequelize = new Sequelize({
   database: 'papeleriapooloropeza',
   username: 'root',
   password: 'pablito03',
-  logging: true, 
+  logging: false, 
   define: {
     timestamps: true,
     underscored: true,
@@ -22,6 +21,34 @@ const sequelize = new Sequelize({
     idle: 10000,
   },
 });
+
+// Función para ejecutar consultas SQL directas y procedimientos almacenados
+export async function query(sql: string, params?: any[]): Promise<any> {
+  try {
+    const [results] = await sequelize.query(sql, {
+      replacements: params,
+      type: sequelize.QueryTypes.SELECT
+    });
+    return results;
+  } catch (error) {
+    console.error('Error executing query:', error);
+    throw error;
+  }
+}
+
+// Función para ejecutar procedimientos almacenados
+export async function callProcedure(procedureName: string, params?: any[]): Promise<any> {
+  try {
+    const [results] = await sequelize.query(`CALL ${procedureName}(${params?.map(() => '?').join(',') || ''})`, {
+      replacements: params,
+      type: sequelize.QueryTypes.RAW
+    });
+    return results;
+  } catch (error) {
+    console.error('Error executing procedure:', error);
+    throw error;
+  }
+}
 
 export async function testConnection() {
   try {

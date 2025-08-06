@@ -21,9 +21,10 @@ CREATE TABLE productos (
     precio_venta DECIMAL(10,2) NOT NULL,
     stock_actual INT DEFAULT 0,
     stock_minimo INT DEFAULT 0,
-    proveedor VARCHAR(255),
+    proveedor_id INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (proveedor_id) REFERENCES proveedores(id) ON DELETE SET NULL
 );
 
 -- =====================================================

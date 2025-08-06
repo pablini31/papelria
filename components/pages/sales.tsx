@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Plus, Search, Filter, Package, Eye, Edit, Trash2, ShoppingCart, User, Calendar, DollarSign } from "lucide-react"
+import { Plus, Search, Filter, Package, Eye, Edit, Trash2, ShoppingCart, User, Calendar, DollarSign, Pencil } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useToast } from "@/hooks/use-toast"
 
@@ -36,6 +36,7 @@ interface Product {
   nombre: string;
   precio_venta: number;
   stock_actual: number;
+  stock_minimo: number;
 }
 
 interface SaleItem {
@@ -67,6 +68,10 @@ export function Sales() {
     metodo_pago: "efectivo",
     items: [] as SaleItem[]
   });
+
+  // Agregar estos estados para la edición de ventas
+  const [isEditSaleOpen, setIsEditSaleOpen] = useState(false);
+  const [editSaleId, setEditSaleId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchSales();
@@ -100,10 +105,14 @@ export function Sales() {
       const response = await fetch('/api/customers');
       if (response.ok) {
         const data = await response.json();
-        setCustomers(data);
+        console.log('Clientes cargados:', data);
+        setCustomers(Array.isArray(data) ? data : []);
+      } else {
+        setCustomers([]);
       }
     } catch (error) {
       console.error('Error fetching customers:', error);
+      setCustomers([]);
     }
   };
 
@@ -112,10 +121,14 @@ export function Sales() {
       const response = await fetch('/api/products');
       if (response.ok) {
         const data = await response.json();
-        setProducts(data);
+        console.log('Productos cargados:', data);
+        setProducts(Array.isArray(data) ? data : []);
+      } else {
+        setProducts([]);
       }
     } catch (error) {
       console.error('Error fetching products:', error);
+      setProducts([]);
     }
   };
 
@@ -137,6 +150,27 @@ export function Sales() {
         toast({
           title: "Error",
           description: "Por favor agrega al menos un producto.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Verificar stock de todos los productos antes de proceder
+      let stockInsuficiente = false;
+      const stockErrors = [];
+
+      for (const item of formData.items) {
+        const product = products.find(p => p.id === item.producto_id);
+        if (product && item.cantidad > product.stock_actual) {
+          stockInsuficiente = true;
+          stockErrors.push(`${product.nombre}: Solo hay ${product.stock_actual} unidades disponibles.`);
+        }
+      }
+
+      if (stockInsuficiente) {
+        toast({
+          title: "Stock insuficiente",
+          description: stockErrors.join('\n'),
           variant: "destructive",
         });
         return;
@@ -227,6 +261,131 @@ export function Sales() {
     }
   };
 
+  // Agregar esta función para cargar los datos de la venta a editar
+  const handleEditSale = async (sale: Sale) => {
+    setEditSaleId(sale.id);
+    
+    try {
+      // Cargar los detalles de la venta
+      const saleResponse = await fetch(`/api/sales/${sale.id}`);
+      if (saleResponse.ok) {
+        const saleData = await saleResponse.json();
+        
+        // Cargar los items de la venta
+        const itemsResponse = await fetch(`/api/sales/${sale.id}/items`);
+        if (itemsResponse.ok) {
+          const itemsData = await itemsResponse.json();
+          
+          // Preparar el formulario con los datos cargados
+          setFormData({
+            cliente_id: saleData.cliente_id ? String(saleData.cliente_id) : "",
+            metodo_pago: saleData.metodo_pago || "efectivo",
+            items: itemsData.map((item: any) => ({
+              producto_id: item.producto_id,
+              nombre_producto: item.nombre_producto,
+              cantidad: item.cantidad,
+              precio_unitario: item.precio_unitario,
+              precio_total: typeof item.precio_total === 'number' ? item.precio_total : Number(item.precio_total)
+            }))
+          });
+          
+          setIsEditSaleOpen(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading sale for edit:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo cargar la venta para editar",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Agregar esta función para actualizar la venta
+  const handleUpdateSale = async () => {
+    if (!editSaleId) return;
+    
+    try {
+      if (formData.items.length === 0) {
+        toast({
+          title: "Error",
+          description: "Por favor agrega al menos un producto.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Verificar stock de todos los productos antes de proceder
+      let stockInsuficiente = false;
+      const stockErrors = [];
+
+      for (const item of formData.items) {
+        const product = products.find(p => p.id === item.producto_id);
+        if (product && item.cantidad > product.stock_actual) {
+          stockInsuficiente = true;
+          stockErrors.push(`${product.nombre}: Solo hay ${product.stock_actual} unidades disponibles.`);
+        }
+      }
+
+      if (stockInsuficiente) {
+        toast({
+          title: "Stock insuficiente",
+          description: stockErrors.join('\n'),
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const total = formData.items.reduce((sum, item) => sum + item.precio_total, 0);
+
+      const saleData = {
+        cliente_id: formData.cliente_id && formData.cliente_id !== "0" ? parseInt(formData.cliente_id) : null,
+        total: total,
+        estado: 'completada',
+        metodo_pago: formData.metodo_pago,
+        items: formData.items
+      };
+
+      const response = await fetch(`/api/sales/${editSaleId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(saleData)
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Venta actualizada",
+          description: "La venta se ha actualizado exitosamente.",
+        });
+        setIsEditSaleOpen(false);
+        setEditSaleId(null);
+        setFormData({
+          cliente_id: "",
+          metodo_pago: "efectivo",
+          items: []
+        });
+        fetchSales();
+      } else {
+        const error = await response.json();
+        toast({
+          title: "Error",
+          description: error.error || "Error al actualizar la venta",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error updating sale:', error);
+      toast({
+        title: "Error",
+        description: "Error al actualizar la venta",
+        variant: "destructive",
+      });
+    }
+  };
+
   const addItemToSale = () => {
     const newItem: SaleItem = {
       producto_id: 0,
@@ -249,15 +408,52 @@ export function Sales() {
     if (field === 'producto_id') {
       const product = products.find(p => p.id === value);
       if (product) {
+        // Verificar si hay stock disponible
+        if (product.stock_actual <= 0) {
+          toast({
+            title: "Stock insuficiente",
+            description: `El producto ${product.nombre} está agotado.`,
+            variant: "destructive",
+          });
+          // Mantener el producto anterior si existe
+          if (updatedItems[index].producto_id) {
+            return;
+          }
+        } else if (product.stock_actual < product.stock_minimo) {
+          // Advertir sobre stock bajo pero permitir la selección
+          toast({
+            title: "Stock bajo",
+            description: `El producto ${product.nombre} tiene stock bajo (${product.stock_actual} unidades).`,
+            variant: "default",
+          });
+        }
+        
         updatedItems[index].nombre_producto = product.nombre;
         updatedItems[index].precio_unitario = product.precio_venta;
         updatedItems[index].precio_total = product.precio_venta * updatedItems[index].cantidad;
       }
     }
 
-    // Si se cambió la cantidad, actualizar precio total
+    // Si se cambió la cantidad, verificar stock y actualizar precio total
     if (field === 'cantidad') {
-      updatedItems[index].precio_total = updatedItems[index].precio_unitario * value;
+      const product = products.find(p => p.id === updatedItems[index].producto_id);
+      if (product) {
+        // Verificar si la cantidad solicitada excede el stock disponible
+        if (value > product.stock_actual) {
+          toast({
+            title: "Stock insuficiente",
+            description: `Solo hay ${product.stock_actual} unidades disponibles de ${product.nombre}.`,
+            variant: "destructive",
+          });
+          // Establecer la cantidad al máximo disponible
+          updatedItems[index].cantidad = product.stock_actual;
+          updatedItems[index].precio_total = product.precio_venta * product.stock_actual;
+        } else {
+          updatedItems[index].precio_total = updatedItems[index].precio_unitario * value;
+        }
+      } else {
+        updatedItems[index].precio_total = updatedItems[index].precio_unitario * value;
+      }
     }
 
     setFormData(prev => ({
@@ -300,7 +496,7 @@ export function Sales() {
   };
 
   // Filter sales based on search and filters
-  const filteredSales = sales.filter(sale => {
+  const filteredSales = Array.isArray(sales) ? sales.filter(sale => {
     const matchesSearch = (sale.nombre_cliente ? sale.nombre_cliente.toLowerCase().includes(searchTerm.toLowerCase()) : false) ||
                          sale.numero_recibo.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDate = !dateFilter || sale.created_at.includes(dateFilter);
@@ -311,7 +507,7 @@ export function Sales() {
                          (amountFilter === "1000+" && Number(sale.total) > 1000);
 
     return matchesSearch && matchesDate && matchesAmount;
-  });
+  }) : [];
 
   return (
     <div className="space-y-6">
@@ -348,7 +544,7 @@ export function Sales() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="0">Cliente ocasional</SelectItem>
-                      {customers.map((customer) => (
+                      {Array.isArray(customers) && customers.map((customer) => (
                         <SelectItem key={customer.id} value={customer.id.toString()}>
                           {customer.nombre}
                         </SelectItem>
@@ -391,7 +587,7 @@ export function Sales() {
                           <SelectValue placeholder="Seleccionar producto" />
                         </SelectTrigger>
                         <SelectContent>
-                          {products.map((product) => (
+                          {Array.isArray(products) && products.map((product) => (
                             <SelectItem key={product.id} value={product.id.toString()}>
                               {product.nombre} - ${product.precio_venta}
                             </SelectItem>
@@ -583,6 +779,13 @@ export function Sales() {
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleEditSale(sale)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm">
@@ -666,13 +869,165 @@ export function Sales() {
                           Cantidad: {item.cantidad} × ${item.precio_unitario}
                         </p>
                       </div>
-                      <p className="font-medium">${item.precio_total.toFixed(2)}</p>
+                      <p className="font-medium">${typeof item.precio_total === 'number' ? item.precio_total.toFixed(2) : Number(item.precio_total).toFixed(2)}</p>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Agregar el Dialog para editar ventas */}
+      <Dialog open={isEditSaleOpen} onOpenChange={setIsEditSaleOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Editar Venta</DialogTitle>
+            <DialogDescription>
+              Modifica los detalles de la venta existente.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="cliente">Cliente</Label>
+                <Select
+                  value={formData.cliente_id}
+                  onValueChange={(value) => setFormData({...formData, cliente_id: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Cliente General</SelectItem>
+                    {Array.isArray(customers) && customers.map((customer) => (
+                      <SelectItem key={customer.id} value={customer.id.toString()}>
+                        {customer.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="metodo_pago">Método de Pago</Label>
+                <Select
+                  value={formData.metodo_pago}
+                  onValueChange={(value) => setFormData({...formData, metodo_pago: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar método" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                    <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                    <SelectItem value="transferencia">Transferencia</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label>Productos</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addItemToSale}>
+                  <Plus className="h-4 w-4 mr-1" /> Agregar Producto
+                </Button>
+              </div>
+              
+              <div className="space-y-2">
+                {formData.items.map((item, index) => (
+                  <div key={index} className="grid grid-cols-[1fr_0.5fr_0.5fr_0.5fr_auto] gap-2 items-end">
+                    <div className="space-y-2">
+                      <Label>Producto</Label>
+                      <Select
+                        value={item.producto_id.toString()}
+                        onValueChange={(value) => updateItem(index, 'producto_id', parseInt(value))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar producto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.isArray(products) && products.map((product) => (
+                            <SelectItem key={product.id} value={product.id.toString()}>
+                              {product.nombre} (Stock: {product.stock_actual})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Cantidad</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={item.cantidad}
+                        onChange={(e) => updateItem(index, 'cantidad', parseInt(e.target.value) || 1)}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Precio Unit.</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={item.precio_unitario}
+                        onChange={(e) => updateItem(index, 'precio_unitario', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Total</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={item.precio_total}
+                        readOnly
+                      />
+                    </div>
+                    
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => removeItem(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="border-t pt-4">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-semibold">Total:</span>
+                <span className="text-2xl font-bold">
+                  ${formData.items.reduce((sum, item) => sum + item.precio_total, 0).toFixed(2)}
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => {
+                setIsEditSaleOpen(false);
+                setEditSaleId(null);
+                setFormData({
+                  cliente_id: "",
+                  metodo_pago: "efectivo",
+                  items: []
+                });
+              }}>
+                Cancelar
+              </Button>
+              <Button onClick={handleUpdateSale}>
+                Guardar Cambios
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

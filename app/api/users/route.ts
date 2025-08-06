@@ -10,13 +10,15 @@ export async function GET(request: NextRequest) {
         id,
         nombre,
         username,
+        password,
         rol,
-        creado_en
-      FROM usuarios
+        creado_en as created_at
+      FROM usuarios 
       ORDER BY creado_en DESC
     `);
 
-    return NextResponse.json(users);
+    return NextResponse.json(Array.isArray(users) ? users : []);
+    
   } catch (error: any) {
     console.error('Error fetching users:', error);
     

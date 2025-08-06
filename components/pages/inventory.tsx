@@ -25,7 +25,8 @@ import {
   Filter,
   Download,
   Upload,
-  Barcode
+  Barcode,
+  Pencil
 } from "lucide-react"
 
 interface Product {
@@ -49,7 +50,7 @@ export function Inventory() {
   const [searchTerm, setSearchTerm] = useState("")
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
-  const [formMode, setFormMode] = useState<"new" | "add-stock">("new")
+  const [formMode, setFormMode] = useState<"new" | "add-stock" | "edit">("new")
   const [selectedProductId, setSelectedProductId] = useState<string>("")
   const [stockToAdd, setStockToAdd] = useState("")
   const [proveedores, setProveedores] = useState<{id: number, nombre: string}[]>([])
@@ -61,9 +62,13 @@ export function Inventory() {
     precio_compra: '',
     precio_venta: '',
     stock_minimo: '',
-    proveedor_id: ''
+    proveedor_id: '',
+    stock_inicial: ''
   })
   const { toast } = useToast()
+
+  // Modificar el estado para incluir el ID del producto que se está editando
+  const [editProductId, setEditProductId] = useState<number | null>(null);
 
   // Categorías que coinciden con la base de datos
   const categories = [
@@ -124,129 +129,9 @@ export function Inventory() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (formMode === "new") {
-      // Verificar qué campos están faltando
-      const missingFields = [];
-      if (!formData.nombre) missingFields.push("Nombre");
-      if (!formData.categoria) missingFields.push("Categoría");
-      if (!formData.precio_compra) missingFields.push("Precio de Compra");
-      if (!formData.precio_venta) missingFields.push("Precio de Venta");
-      
-      if (missingFields.length > 0) {
-        toast({
-          title: "Error",
-          description: `Por favor completa los siguientes campos obligatorios: ${missingFields.join(", ")}.`,
-          variant: "destructive",
-        })
-        return
-      }
-    
-    try {
-      const response = await fetch('/api/products', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          nombre: formData.nombre,
-          descripcion: formData.descripcion,
-          codigo_barras: formData.codigo_barras || null,
-          categoria: formData.categoria,
-          precio_compra: parseFloat(formData.precio_compra) || 0,
-          precio_venta: parseFloat(formData.precio_venta) || 0,
-          stock_minimo: parseInt(formData.stock_minimo) || 0,
-          proveedor_id: formData.proveedor_id ? parseInt(formData.proveedor_id) : null
-        })
-      })
-
-      if (response.ok) {
-        toast({
-          title: "Producto agregado",
-          description: "El producto se ha agregado exitosamente al inventario.",
-        })
-        setIsAddProductOpen(false)
-        setFormData({
-          nombre: '',
-          descripcion: '',
-          codigo_barras: '',
-          categoria: '',
-          precio_compra: '',
-          precio_venta: '',
-          stock_minimo: '',
-          proveedor_id: ''
-        })
-        fetchProducts()
-      } else {
-        const error = await response.json()
-        toast({
-          title: "Error",
-          description: error.error || "Error al agregar el producto",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error('Error creating product:', error)
-      toast({
-        title: "Error",
-        description: "Error al agregar el producto",
-          variant: "destructive",
-        })
-      }
-    } else {
-      // Modo agregar stock
-      if (!selectedProductId || !stockToAdd) {
-        toast({
-          title: "Error",
-          description: "Selecciona un producto y especifica la cantidad a agregar.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      try {
-        const response = await fetch(`/api/products/${selectedProductId}/stock`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            cantidad: parseInt(stockToAdd)
-          })
-        })
-
-        if (response.ok) {
-          toast({
-            title: "Stock actualizado",
-            description: `Se agregaron ${stockToAdd} unidades al producto`,
-          })
-          setFormMode("new")
-          setSelectedProductId("")
-          setStockToAdd("")
-          fetchProducts()
-          setIsAddProductOpen(false)
-        } else {
-          const error = await response.json()
-          toast({
-            title: "Error",
-            description: error.error || "Error al actualizar el stock",
-            variant: "destructive",
-          })
-        }
-      } catch (error) {
-        console.error('Error updating stock:', error)
-        toast({
-          title: "Error",
-          description: "Error al actualizar el stock",
-          variant: "destructive",
-        })
-      }
-    }
-  }
-
+  // Modificar la función handleEditProduct para guardar el ID del producto
   const handleEditProduct = (product: Product) => {
+    setEditProductId(product.id);
     setFormData({
       nombre: product.nombre,
       codigo_barras: product.codigo_barras || '',
@@ -255,10 +140,11 @@ export function Inventory() {
       precio_compra: product.precio_compra.toString(),
       precio_venta: product.precio_venta.toString(),
       stock_minimo: product.stock_minimo.toString(),
-      proveedor_id: product.proveedor || '' // Assuming product.proveedor is the ID
-    })
-    setFormMode("new")
-    setIsAddProductOpen(true)
+      proveedor_id: product.proveedor_id ? product.proveedor_id.toString() : '',
+      stock_inicial: product.stock_actual.toString()
+    });
+    setFormMode("edit");
+    setIsAddProductOpen(true);
   }
 
   const handleDeleteProduct = async (productId: number) => {
@@ -297,6 +183,26 @@ export function Inventory() {
     return { status: 'in-stock', label: 'En Stock', color: 'default' }
   }
 
+  // Agregar estas funciones para mostrar indicadores de stock
+  const getStockStatusBadge = (stockActual: number, stockMinimo: number) => {
+    if (stockActual <= 0) {
+      return <Badge variant="destructive">Agotado</Badge>;
+    } else if (stockActual < stockMinimo) {
+      return <Badge variant="default">Stock Bajo</Badge>;
+    } else {
+      return <Badge variant="outline">{stockActual} unidades</Badge>;
+    }
+  };
+
+  const getStockClass = (stockActual: number, stockMinimo: number) => {
+    if (stockActual <= 0) {
+      return "bg-red-50";
+    } else if (stockActual < stockMinimo) {
+      return "bg-yellow-50";
+    }
+    return "";
+  };
+
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.codigo_barras?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -309,6 +215,194 @@ export function Inventory() {
   const lowStockProducts = products.filter(p => p.stock_actual <= p.stock_minimo && p.stock_actual > 0).length
   const outOfStockProducts = products.filter(p => p.stock_actual === 0).length
   const totalValue = products.reduce((sum, p) => sum + (Number(p.precio_compra) * p.stock_actual), 0)
+
+  // Modificar la función handleSubmit para manejar la edición
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // SOLO validar campos de formulario para productos nuevos o edición
+    // NO validar cuando se está agregando stock
+    if (formMode === "new" || formMode === "edit") {
+      // Verificar qué campos están faltando
+      const missingFields = [];
+      if (!formData.nombre) missingFields.push("Nombre");
+      if (!formData.categoria) missingFields.push("Categoría");
+      if (!formData.precio_compra) missingFields.push("Precio de Compra");
+      if (!formData.precio_venta) missingFields.push("Precio de Venta");
+      // Solo requerir stock inicial para productos nuevos, no para edición
+      if (formMode === "new" && !formData.stock_inicial) missingFields.push("Stock Inicial");
+      
+      if (missingFields.length > 0) {
+        toast({
+          title: "Error",
+          description: `Por favor completa los siguientes campos obligatorios: ${missingFields.join(", ")}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    if (formMode === "new") {
+      try {
+        const response = await fetch('/api/products', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            nombre: formData.nombre,
+            descripcion: formData.descripcion,
+            codigo_barras: formData.codigo_barras || null,
+            categoria: formData.categoria,
+            precio_compra: parseFloat(formData.precio_compra) || 0,
+            precio_venta: parseFloat(formData.precio_venta) || 0,
+            stock_minimo: parseInt(formData.stock_minimo) || 0,
+            stock_actual: parseInt(formData.stock_inicial) || 0,
+            proveedor_id: formData.proveedor_id ? parseInt(formData.proveedor_id) : null
+          })
+        });
+
+        if (response.ok) {
+          toast({
+            title: "Producto agregado",
+            description: "El producto se ha agregado exitosamente al inventario.",
+          });
+          setIsAddProductOpen(false);
+          setFormData({
+            nombre: '',
+            descripcion: '',
+            codigo_barras: '',
+            categoria: '',
+            precio_compra: '',
+            precio_venta: '',
+            stock_minimo: '',
+            proveedor_id: '',
+            stock_inicial: ''
+          });
+          fetchProducts();
+        } else {
+          const error = await response.json();
+          toast({
+            title: "Error",
+            description: error.error || "Error al agregar el producto",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error('Error creating product:', error);
+        toast({
+          title: "Error",
+          description: "Error al agregar el producto",
+          variant: "destructive",
+        });
+      }
+    } else if (formMode === "edit" && editProductId) {
+      // Modo editar producto (NO incluir stock_actual)
+      try {
+        const response = await fetch(`/api/products/${editProductId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            nombre: formData.nombre,
+            descripcion: formData.descripcion,
+            codigo_barras: formData.codigo_barras || null,
+            categoria: formData.categoria,
+            precio_compra: parseFloat(formData.precio_compra) || 0,
+            precio_venta: parseFloat(formData.precio_venta) || 0,
+            stock_minimo: parseInt(formData.stock_minimo) || 0,
+            // NO enviar stock_actual en edición - eso es solo para agregar productos nuevos
+            proveedor_id: formData.proveedor_id ? parseInt(formData.proveedor_id) : null
+          })
+        });
+
+        if (response.ok) {
+          toast({
+            title: "Producto actualizado",
+            description: "El producto se ha actualizado exitosamente.",
+          });
+          setIsAddProductOpen(false);
+          setFormData({
+            nombre: '',
+            descripcion: '',
+            codigo_barras: '',
+            categoria: '',
+            precio_compra: '',
+            precio_venta: '',
+            stock_minimo: '',
+            proveedor_id: '',
+            stock_inicial: ''
+          });
+          setEditProductId(null);
+          setFormMode("new");
+          fetchProducts(); // Refrescar la lista de productos
+        } else {
+          const error = await response.json();
+          toast({
+            title: "Error",
+            description: error.error || "Error al actualizar el producto",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error('Error updating product:', error);
+        toast({
+          title: "Error",
+          description: "Error al actualizar el producto",
+          variant: "destructive",
+        });
+      }
+    } else if (formMode === "add-stock") {
+      // Modo agregar stock
+      if (!selectedProductId || !stockToAdd) {
+        toast({
+          title: "Error",
+          description: "Selecciona un producto y especifica la cantidad a agregar.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/products/${selectedProductId}/stock`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            cantidad: parseInt(stockToAdd)
+          })
+        });
+
+        if (response.ok) {
+          toast({
+            title: "Stock actualizado",
+            description: `Se agregaron ${stockToAdd} unidades al producto`,
+          });
+          setFormMode("new");
+          setSelectedProductId("");
+          setStockToAdd("");
+          fetchProducts();
+          setIsAddProductOpen(false);
+        } else {
+          const error = await response.json();
+          toast({
+            title: "Error",
+            description: error.error || "Error al actualizar el stock",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error('Error updating stock:', error);
+        toast({
+          title: "Error",
+          description: "Error al actualizar el stock",
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -376,47 +470,85 @@ export function Inventory() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setFormMode("add-stock");
+              setIsAddProductOpen(true);
+            }}
+          >
+            <TrendingUp className="mr-2 h-4 w-4" />
+            Agregar Stock
+          </Button>
           <Dialog open={isAddProductOpen} onOpenChange={setIsAddProductOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button
+                onClick={() => {
+                  // RESETEAR TODO cuando se abre para agregar producto nuevo
+                  setFormMode("new");
+                  setEditProductId(null);
+                  setSelectedProductId("");
+                  setStockToAdd("");
+                  setFormData({
+                    nombre: '',
+                    descripcion: '',
+                    codigo_barras: '',
+                    categoria: '',
+                    precio_compra: '',
+                    precio_venta: '',
+                    stock_minimo: '',
+                    proveedor_id: '',
+                    stock_inicial: ''
+                  });
+                }}
+              >
                 <Plus className="mr-2 h-4 w-4" />
-                Agregar Producto
+                Nuevo Producto
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>
-                  {formMode === "new" ? "Agregar Nuevo Producto" : "Agregar Stock"}
+                  {formMode === "new" 
+                    ? "Agregar Nuevo Producto" 
+                    : formMode === "edit" 
+                      ? "Editar Producto" 
+                      : "Agregar Stock"
+                  }
                 </DialogTitle>
                 <DialogDescription>
                   {formMode === "new" 
                     ? "Completa la información del producto para agregarlo al inventario"
-                    : "Selecciona un producto existente y especifica la cantidad a agregar"
+                    : formMode === "edit"
+                      ? "Modifica la información del producto existente"
+                      : "Selecciona un producto existente y especifica la cantidad a agregar"
                   }
                 </DialogDescription>
               </DialogHeader>
               
               {/* Selector de modo */}
-              <div className="flex gap-2 mb-4">
-                <Button
-                  type="button"
-                  variant={formMode === "new" ? "default" : "outline"}
-                  onClick={() => setFormMode("new")}
-                  className="flex-1"
-                >
-                  Nuevo Producto
-                </Button>
-                <Button
-                  type="button"
-                  variant={formMode === "add-stock" ? "default" : "outline"}
-                  onClick={() => setFormMode("add-stock")}
-                  className="flex-1"
-                >
-                  Agregar Stock
-                </Button>
-              </div>
+              {formMode !== "edit" && (
+                <div className="flex gap-2 mb-4">
+                  <Button
+                    type="button"
+                    variant={formMode === "new" ? "default" : "outline"}
+                    onClick={() => setFormMode("new")}
+                    className="flex-1"
+                  >
+                    Nuevo Producto
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={formMode === "add-stock" ? "default" : "outline"}
+                    onClick={() => setFormMode("add-stock")}
+                    className="flex-1"
+                  >
+                    Agregar Stock
+                  </Button>
+                </div>
+              )}
 
-              {formMode === "new" ? (
+              {(formMode === "new" || formMode === "edit") ? (
               <form onSubmit={handleSubmit}>
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -521,6 +653,49 @@ export function Inventory() {
                     </div>
                   </div>
                   
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      {formMode === "edit" ? (
+                        <>
+                          <Label>Stock Actual (Solo lectura)</Label>
+                          <div className="p-2 bg-muted rounded-md border">
+                            <span className="text-lg font-semibold">
+                              {formData.stock_inicial || '0'} unidades disponibles
+                            </span>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Para modificar el stock, usa la opción "Agregar Stock"
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <Label htmlFor="initial-stock">Stock Inicial</Label>
+                          <Input 
+                            id="initial-stock" 
+                            type="number" 
+                            placeholder="Ej: 100 (cantidad inicial del producto)"
+                            value={formData.stock_inicial}
+                            onChange={(e) => setFormData({...formData, stock_inicial: e.target.value})}
+                            required
+                          />
+                        </>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">
+                        {formMode === "edit" ? "Stock mínimo para alertas" : "Stock que se registrará"}
+                      </Label>
+                      <div className="p-2 bg-muted rounded-md">
+                        <span className="text-lg font-semibold">
+                          {formMode === "edit" 
+                            ? `${formData.stock_minimo || '0'} unidades (mínimo)`
+                            : `${formData.stock_inicial ? `${formData.stock_inicial} unidades` : '0 unidades'}`
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
                   <div className="space-y-2">
                     <Label htmlFor="description">Descripción</Label>
                     <Textarea 
@@ -534,15 +709,34 @@ export function Inventory() {
                 </div>
                 
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setIsAddProductOpen(false)}>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => {
+                      setIsAddProductOpen(false);
+                      setFormMode("new");
+                      setEditProductId(null);
+                      setFormData({
+                        nombre: '',
+                        descripcion: '',
+                        codigo_barras: '',
+                        categoria: '',
+                        precio_compra: '',
+                        precio_venta: '',
+                        stock_minimo: '',
+                        proveedor_id: '',
+                        stock_inicial: ''
+                      });
+                    }}
+                  >
                     Cancelar
                   </Button>
                   <Button type="submit">
-                    Guardar Producto
+                    {formMode === "edit" ? "Actualizar Producto" : "Guardar Producto"}
                   </Button>
                 </div>
               </form>
-            ) : (
+            ) : formMode === "add-stock" ? (
               <form onSubmit={handleSubmit}>
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -576,7 +770,16 @@ export function Inventory() {
                 </div>
                 
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setIsAddProductOpen(false)}>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => {
+                      setIsAddProductOpen(false);
+                      setFormMode("new");
+                      setSelectedProductId("");
+                      setStockToAdd("");
+                    }}
+                  >
                     Cancelar
                   </Button>
                   <Button type="submit">
@@ -584,7 +787,7 @@ export function Inventory() {
                   </Button>
                 </div>
               </form>
-            )}
+            ) : null}
             </DialogContent>
           </Dialog>
         </div>
@@ -712,7 +915,7 @@ export function Inventory() {
                 {filteredProducts.map((product) => {
                   const stockStatus = getStockStatus(product.stock_actual, product.stock_minimo)
                   return (
-                    <TableRow key={product.id}>
+                    <TableRow key={product.id} className={getStockClass(product.stock_actual, product.stock_minimo)}>
                       <TableCell>
                         <div>
                           <div className="font-medium">{product.nombre}</div>
@@ -750,13 +953,47 @@ export function Inventory() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
+                        <div className="flex gap-1">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => {
+                              toast({
+                                title: `Producto: ${product.nombre}`,
+                                description: `Código: ${product.codigo_barras || 'Sin código'} | Stock: ${product.stock_actual} | Precio: $${Number(product.precio_venta).toFixed(2)}`,
+                                duration: 5000,
+                              });
+                            }}
+                            title="Ver detalles"
+                          >
                             <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => {
+                              // Agregar stock específico a este producto
+                              setSelectedProductId(product.id.toString());
+                              setFormMode("add-stock");
+                              setStockToAdd("");
+                              setIsAddProductOpen(true);
+                            }}
+                            title="Agregar stock"
+                            className="text-green-600 hover:text-green-700"
+                          >
+                            <TrendingUp className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleEditProduct(product)}
+                            title="Editar producto"
+                          >
+                            <Pencil className="h-4 w-4" />
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm">
+                          <Button variant="outline" size="sm" title="Eliminar producto">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                             </AlertDialogTrigger>
@@ -786,6 +1023,71 @@ export function Inventory() {
               </TableBody>
             </Table>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Agregar una sección para mostrar alertas de stock */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle>Alertas de Inventario</CardTitle>
+          <CardDescription>Productos que requieren atención</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-red-600">Productos Agotados</h3>
+              <div className="mt-2">
+                {products.filter(p => p.stock_actual <= 0).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No hay productos agotados.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    {products
+                      .filter(p => p.stock_actual <= 0)
+                      .map(product => (
+                        <div key={product.id} className="p-2 border rounded flex justify-between items-center bg-red-50">
+                          <div>
+                            <p className="font-medium">{product.nombre}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Stock: {product.stock_actual} | Mínimo: {product.stock_minimo}
+                            </p>
+                          </div>
+                          <Button variant="default" size="sm" onClick={() => handleEditProduct(product)}>
+                            Actualizar Stock
+                          </Button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-amber-600">Productos con Stock Bajo</h3>
+              <div className="mt-2">
+                {products.filter(p => p.stock_actual > 0 && p.stock_actual < p.stock_minimo).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No hay productos con stock bajo.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    {products
+                      .filter(p => p.stock_actual > 0 && p.stock_actual < p.stock_minimo)
+                      .map(product => (
+                        <div key={product.id} className="p-2 border rounded flex justify-between items-center bg-yellow-50">
+                          <div>
+                            <p className="font-medium">{product.nombre}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Stock: {product.stock_actual} | Mínimo: {product.stock_minimo}
+                            </p>
+                          </div>
+                          <Button variant="default" size="sm" onClick={() => handleEditProduct(product)}>
+                            Actualizar Stock
+                          </Button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -1,9 +1,4 @@
--- =====================================================
--- SCRIPT 1: CREACIÓN DE LA BASE DE DATOS
--- Nombre: PapeleriaPoolOropeza
--- Autor: [Tu Nombre]
--- Fecha: [Fecha Actual]
--- =====================================================
+
 
 -- Crear la base de datos
 CREATE DATABASE IF NOT EXISTS PapeleriaPoolOropeza;

@@ -70,8 +70,23 @@ export function Suppliers() {
       const response = await fetch('/api/proveedores')
       const data = await response.json()
       console.log('Proveedores cargados:', data)
-      console.log('Total de proveedores:', data.length)
-      setSuppliers(data)
+      
+      // Verificar si la respuesta es un array
+      if (Array.isArray(data)) {
+        console.log('Total de proveedores:', data.length)
+        setSuppliers(data)
+      } else if (data.error) {
+        console.error('Error en la respuesta:', data.error)
+        toast({
+          title: "Error",
+          description: data.error || "No se pudieron cargar los proveedores",
+          variant: "destructive",
+        })
+        setSuppliers([]) // Establecer array vacío en caso de error
+      } else {
+        console.log('Respuesta inesperada:', data)
+        setSuppliers([]) // Establecer array vacío para respuestas inesperadas
+      }
     } catch (error) {
       console.error('Error fetching suppliers:', error)
       toast({
@@ -79,6 +94,7 @@ export function Suppliers() {
         description: "No se pudieron cargar los proveedores",
         variant: "destructive",
       })
+      setSuppliers([]) // Establecer array vacío en caso de error
     } finally {
       setLoading(false)
     }
@@ -223,11 +239,11 @@ export function Suppliers() {
     }
   }
 
-  const filteredSuppliers = suppliers.filter(supplier => 
+  const filteredSuppliers = Array.isArray(suppliers) ? suppliers.filter(supplier => 
     supplier.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (supplier.email && supplier.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (supplier.telefono && supplier.telefono.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  ) : []
 
   return (
     <div className="p-6 space-y-6">

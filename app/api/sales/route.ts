@@ -4,45 +4,35 @@ import { Sale, Customer } from '@/models';
 
 export async function GET(request: NextRequest) {
   try {
-    // Verificar conexión a la base de datos
     await sequelize.authenticate();
     
-    // Intentar usar procedimiento almacenado, si falla usar consulta directa
     try {
       const [sales] = await sequelize.query('CALL sp_MostrarVentas()');
-      return NextResponse.json(sales);
-    } catch (procedureError) {
-      console.log('⚠️ Procedimiento almacenado no disponible, usando consulta directa');
       
-      // Usar consulta directa como fallback
-      const [sales] = await sequelize.query(`
-        SELECT 
-          v.id,
-          v.numero_recibo,
-          v.cliente_id,
-          c.nombre AS nombre_cliente,
-          c.email AS email_cliente,
-          v.total,
-          v.estado,
-          v.metodo_pago,
-          v.created_at,
-          v.updated_at
-        FROM ventas v
-        LEFT JOIN clientes c ON v.cliente_id = c.id
-        ORDER BY v.created_at DESC
-      `);
-
-    return NextResponse.json(sales);
+      if (Array.isArray(sales)) {
+        return NextResponse.json(sales);
+      } else {
+        const [salesDirect] = await sequelize.query('SELECT * FROM ventas ORDER BY created_at DESC');
+        return NextResponse.json(Array.isArray(salesDirect) ? salesDirect : []);
+      }
+    } catch (error) {
+      console.error('Error en stored procedure de ventas:', error);
+      
+      try {
+        const [sales] = await sequelize.query('SELECT * FROM ventas ORDER BY created_at DESC');
+        return NextResponse.json(Array.isArray(sales) ? sales : []);
+      } catch (directError) {
+        console.error('Error con SQL directo:', directError);
+        return NextResponse.json([]);
+      }
     }
   } catch (error: any) {
     console.error('Error fetching sales:', error);
     
-    // Si es un error de conexión o dependencia, devolver array vacío
     if (error.name === 'SequelizeConnectionError' || 
         error.message.includes('ECONNREFUSED') ||
         error.message.includes('connect') ||
         error.message.includes('mysql2')) {
-      console.log('⚠️ Base de datos no disponible, devolviendo array vacío');
       return NextResponse.json([]);
     }
     

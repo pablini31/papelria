@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    const id = await params.id;
     
     // Verificar conexión a la base de datos
     await sequelize.authenticate();
@@ -21,7 +21,7 @@ export async function GET(
         p.codigo_barras,
         iv.cantidad,
         iv.precio_unitario,
-        iv.precio_total,
+        CAST(iv.precio_total AS DECIMAL(10,2)) AS precio_total,
         iv.created_at
       FROM items_venta iv
       JOIN productos p ON iv.producto_id = p.id

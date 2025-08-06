@@ -1,102 +1,166 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sequelize from '@/lib/database';
 
-export async function PUT(
+export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
-    const body = await request.json();
+    const { id } = await params;
     
-    // Verificar conexión a la base de datos
+    console.log('=== OBTENIENDO PRODUCTO ===');
+    console.log('ID:', id);
+    
     await sequelize.authenticate();
     
-    // Actualizar producto usando procedimiento almacenado
-    const [result] = await sequelize.query('CALL sp_ActualizarProducto(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', {
-      replacements: [
-        parseInt(id),
-        body.nombre,
-        body.descripcion || '',
-        body.codigo_barras || '',
-        body.categoria,
-        body.subcategoria || '',
-        body.precio_compra || 0,
-        body.precio_venta || 0,
-        body.stock_minimo || 0,
-        body.proveedor || ''
-      ]
-    });
-    
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('Error updating product:', error);
-    
-    // Si falla el procedimiento almacenado, usar consulta directa
     try {
-      await sequelize.query(`
+      const [product] = await sequelize.query('CALL sp_ObtenerProducto(?)', {
+        replacements: [parseInt(id)]
+      });
+      
+      if (Array.isArray(product) && product.length > 0) {
+        return NextResponse.json(product[0]);
+      } else {
+        const [productDirect] = await sequelize.query('SELECT * FROM productos WHERE id = ?', {
+          replacements: [parseInt(id)]
+        });
+        
+        if (Array.isArray(productDirect) && productDirect.length > 0) {
+          return NextResponse.json(productDirect[0]);
+        } else {
+          return NextResponse.json(
+            { error: 'Producto no encontrado' },
+            { status: 404 }
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error en stored procedure de obtener producto:', error);
+      
+      try {
+        const [product] = await sequelize.query('SELECT * FROM productos WHERE id = ?', {
+          replacements: [parseInt(id)]
+        });
+        
+        if (Array.isArray(product) && product.length > 0) {
+          return NextResponse.json(product[0]);
+        } else {
+          return NextResponse.json(
+            { error: 'Producto no encontrado' },
+            { status: 404 }
+          );
+        }
+      } catch (directError) {
+        console.error('Error con SQL directo:', directError);
+        return NextResponse.json(
+          { error: 'Error al obtener el producto' },
+          { status: 500 }
+        );
+      }
+    }
+  } catch (error: any) {
+    console.error('Error getting product:', error);
+    
+    if (error.name === 'SequelizeConnectionError' || 
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('connect')) {
+      return NextResponse.json(
+        { error: 'Base de datos no disponible. Por favor, inicia MySQL.' },
+        { status: 503 }
+      );
+    }
+    
+    return NextResponse.json(
+      { error: 'Error al obtener el producto' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const body = await request.json();
+    const { id } = await params;
+    
+    await sequelize.authenticate();
+    
+    try {
+      await sequelize.query('CALL sp_ActualizarProducto(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', {
+        replacements: [
+          parseInt(id),
+          body.nombre,
+          body.descripcion || '',
+          body.codigo_barras || null,
+          body.categoria,
+          body.subcategoria || null,
+          body.precio_compra || 0,
+          body.precio_venta || 0,
+          body.stock_minimo || 0,
+          body.proveedor || null
+        ]
+      });
+      
+      console.log('Producto actualizado con stored procedure');
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Producto actualizado exitosamente' 
+      });
+    } catch (error) {
+      console.error('Error en stored procedure de actualizar producto:', error);
+      console.log('Usando SQL directo como fallback...');
+      
+      const [result] = await sequelize.query(`
         UPDATE productos 
-        SET nombre = ?, descripcion = ?, codigo_barras = ?, categoria = ?, 
-            precio_compra = ?, precio_venta = ?, stock_minimo = ?, proveedor = ?, 
-            updated_at = NOW()
+        SET 
+          nombre = ?,
+          descripcion = ?,
+          codigo_barras = ?,
+          categoria = ?,
+          precio_compra = ?,
+          precio_venta = ?,
+          stock_minimo = ?,
+          proveedor_id = ?,
+          updated_at = NOW()
         WHERE id = ?
       `, {
         replacements: [
           body.nombre,
           body.descripcion || '',
-          body.codigo_barras || '',
+          body.codigo_barras || null,
           body.categoria,
           body.precio_compra || 0,
           body.precio_venta || 0,
           body.stock_minimo || 0,
-          body.proveedor || '',
+          body.proveedor_id || null,
           parseInt(id)
         ]
       });
-      
-      return NextResponse.json({ success: true });
-    } catch (updateError) {
-      console.error('Error with direct update:', updateError);
+
+      console.log('Producto actualizado exitosamente con SQL directo');
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Producto actualizado exitosamente' 
+      });
+    }
+    
+  } catch (error: any) {
+    console.error('Error updating product:', error);
+    
+    if (error.name === 'SequelizeConnectionError' || 
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('connect')) {
       return NextResponse.json(
-        { error: 'Error al actualizar el producto' },
-        { status: 500 }
+        { error: 'Base de datos no disponible. Por favor, inicia MySQL.' },
+        { status: 503 }
       );
     }
+    
+    return NextResponse.json(
+      { error: 'Error al actualizar el producto', details: error.message },
+      { status: 500 }
+    );
   }
 }
-
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const { id } = params;
-    
-    // Verificar conexión a la base de datos
-    await sequelize.authenticate();
-    
-    // Eliminar producto usando procedimiento almacenado
-    const [result] = await sequelize.query('CALL sp_EliminarProducto(?)', {
-      replacements: [parseInt(id)]
-    });
-    
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('Error deleting product:', error);
-    
-    // Si falla el procedimiento almacenado, usar consulta directa
-    try {
-      await sequelize.query('DELETE FROM productos WHERE id = ?', {
-        replacements: [parseInt(id)]
-      });
-      
-      return NextResponse.json({ success: true });
-    } catch (deleteError) {
-      console.error('Error with direct delete:', deleteError);
-      return NextResponse.json(
-        { error: 'Error al eliminar el producto' },
-        { status: 500 }
-      );
-    }
-  }
-} 
