@@ -8,9 +8,6 @@ export async function GET(
   try {
     const id = await params.id;
     
-    console.log('=== OBTENIENDO VENTA ===');
-    console.log('ID:', id);
-    
     await sequelize.authenticate();
     
     try {
@@ -43,7 +40,6 @@ export async function GET(
         }
       }
     } catch (procedureError) {
-      console.error('Error with stored procedure, using direct SQL:', procedureError);
       const [salesDirect] = await sequelize.query(`
         SELECT 
           v.*,
@@ -98,9 +94,7 @@ export async function PUT(
           ],
           transaction
         });
-        console.log('✅ Venta actualizada con stored procedure');
       } catch (procedureError) {
-        console.log('⚠️ Error en stored procedure, usando SQL directo:', procedureError);
         await sequelize.query(`
           UPDATE ventas
           SET 
@@ -151,7 +145,6 @@ export async function PUT(
               transaction
             });
           } catch (itemProcedureError) {
-            console.log('Error en sp_CrearItemVenta, usando SQL directo');
             await sequelize.query(`
               INSERT INTO items_venta (
                 venta_id, 
@@ -186,15 +179,13 @@ export async function PUT(
       
       await transaction.commit();
       
-      console.log('✅ Venta actualizada exitosamente');
       return NextResponse.json({ success: true });
     } catch (error) {
-      // Revertir transacción en caso de error
       await transaction.rollback();
       throw error;
     }
   } catch (error: any) {
-    console.error('❌ Error updating sale:', error);
+    console.error(' Error updating sale:', error);
     return NextResponse.json(
       { error: 'Error al actualizar la venta' },
       { status: 500 }
@@ -209,20 +200,13 @@ export async function DELETE(
   try {
     const id = await params.id;
     
-    // Verificar conexión a la base de datos
     await sequelize.authenticate();
     
-    // Intentar usar stored procedure para eliminar
     try {
-      console.log('🔄 Intentando usar procedimiento almacenado sp_EliminarVenta...');
       await sequelize.query('CALL sp_EliminarVenta(?)', {
         replacements: [parseInt(id)]
       });
-      console.log('✅ Venta eliminada con stored procedure');
     } catch (procedureError) {
-      console.log('⚠️ Error en stored procedure, usando SQL directo:', procedureError);
-      // Fallback a SQL directo
-      // Primero restaurar el stock de los productos
       await sequelize.query(`
         UPDATE productos p
         JOIN items_venta iv ON p.id = iv.producto_id
@@ -232,7 +216,6 @@ export async function DELETE(
         replacements: [id]
       });
       
-      // Luego eliminar la venta
       const [result] = await sequelize.query('DELETE FROM ventas WHERE id = ?', {
         replacements: [id]
       });

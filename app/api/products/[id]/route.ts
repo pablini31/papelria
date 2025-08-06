@@ -8,9 +8,6 @@ export async function GET(
   try {
     const { id } = await params;
     
-    console.log('=== OBTENIENDO PRODUCTO ===');
-    console.log('ID:', id);
-    
     await sequelize.authenticate();
     
     try {
@@ -35,8 +32,6 @@ export async function GET(
         }
       }
     } catch (error) {
-      console.error('Error en stored procedure de obtener producto:', error);
-      
       try {
         const [product] = await sequelize.query('SELECT * FROM productos WHERE id = ?', {
           replacements: [parseInt(id)]
@@ -51,7 +46,6 @@ export async function GET(
           );
         }
       } catch (directError) {
-        console.error('Error con SQL directo:', directError);
         return NextResponse.json(
           { error: 'Error al obtener el producto' },
           { status: 500 }
@@ -59,8 +53,6 @@ export async function GET(
       }
     }
   } catch (error: any) {
-    console.error('Error getting product:', error);
-    
     if (error.name === 'SequelizeConnectionError' || 
         error.message.includes('ECONNREFUSED') ||
         error.message.includes('connect')) {
@@ -103,15 +95,11 @@ export async function PUT(
         ]
       });
       
-      console.log('Producto actualizado con stored procedure');
       return NextResponse.json({ 
         success: true, 
         message: 'Producto actualizado exitosamente' 
       });
     } catch (error) {
-      console.error('Error en stored procedure de actualizar producto:', error);
-      console.log('Usando SQL directo como fallback...');
-      
       const [result] = await sequelize.query(`
         UPDATE productos 
         SET 
@@ -139,7 +127,6 @@ export async function PUT(
         ]
       });
 
-      console.log('Producto actualizado exitosamente con SQL directo');
       return NextResponse.json({ 
         success: true, 
         message: 'Producto actualizado exitosamente' 
@@ -147,8 +134,6 @@ export async function PUT(
     }
     
   } catch (error: any) {
-    console.error('Error updating product:', error);
-    
     if (error.name === 'SequelizeConnectionError' || 
         error.message.includes('ECONNREFUSED') ||
         error.message.includes('connect')) {

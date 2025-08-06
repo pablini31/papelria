@@ -53,31 +53,8 @@ export function Dashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      let reportsData;
-      
-      try {
-        const reportsResponse = await fetch('/api/reports');
-        reportsData = await reportsResponse.json();
-      } catch (error) {
-        const viewsResponse = await fetch('/api/reports/views?tipo=dashboard-completo');
-        const viewsData = await viewsResponse.json();
-        
-        if (viewsData.success && viewsData.data) {
-          const data = viewsData.data;
-          reportsData = {
-            summary: {
-              totalRevenue: data.resumen_hoy?.ingresos_totales || 0,
-              totalSales: data.resumen_hoy?.total_ventas || 0,
-              totalCustomers: data.clientes_top?.length || 0,
-              totalProducts: data.productos_mas_vendidos?.length || 0
-            },
-            sales: data.ventas_detalladas || [],
-            products: data.productos_mas_vendidos || []
-          };
-        } else {
-          throw new Error('No se pudieron obtener datos de vistas');
-        }
-      }
+      const reportsResponse = await fetch('/api/reports');
+      const reportsData = await reportsResponse.json();
       
       if (reportsData.summary) {
         setStats({
